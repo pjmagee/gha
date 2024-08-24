@@ -90,3 +90,21 @@ func (m *Examples) Gha_OnPullRequest() *dagger.Directory {
 		).
 		Config()
 }
+
+// Generate a report and upload it as an artifact
+func (m *Examples) Gha_UploadArtifact() *dagger.Directory {
+
+	return dag.
+		Gha().
+		WithPipeline(
+			"upload artifact",
+			"generate-report --source=. export --path report.html",
+			dagger.GhaWithPipelineOpts{
+				UploadStepName:     "upload report",
+				UploadArtifactName: "report",
+				UploadArtifactPath: "report.html",
+			},
+		).
+		Config()
+
+}

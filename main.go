@@ -210,6 +210,16 @@ func (m *Gha) WithPipeline(
 	// Run the pipeline on git push to the specified branches
 	// +optional
 	onPushBranches []string,
+	// Upload artifact step name
+	// +optional
+	uploadStepName string,
+	// Upload artifact name
+	// +optional
+	uploadArtifactName string,
+	// Upload artifact path
+	// +optional
+	uploadArtifactPath string,
+
 ) *Gha {
 	p := &Pipeline{
 		Name:           name,
@@ -322,8 +332,30 @@ func (m *Gha) WithPipeline(
 	if onPushTags != nil {
 		p.OnPush(nil, onPushTags)
 	}
+	if uploadStepName != "" && uploadArtifactName != "" && uploadArtifactPath != "" {
+		p.WithUploadArtifact(uploadStepName, uploadArtifactName, uploadArtifactPath)
+	}
+
 	m.Pipelines = append(m.Pipelines, p)
 	return m
+}
+
+func (p *Pipeline) WithUploadArtifact(
+	// Name of upload step
+	stepName string,
+	// Name of the artifact to upload
+	artifactName string,
+	// Path to the artifact to upload
+	artifactPath string,
+) *Pipeline {
+
+	p.ArtifactUploadStep = p.uploadArtifactStep(map[string]string{
+		"stepName":     stepName,
+		"artifactName": artifactName,
+		"artifactPath": artifactPath,
+	})
+
+	return p
 }
 
 func (p *Pipeline) OnIssueComment(
@@ -406,6 +438,8 @@ type Pipeline struct {
 	Settings Settings
 	// +private
 	Triggers WorkflowTriggers
+	// +private
+	ArtifactUploadStep *JobStep
 }
 
 func (p *Pipeline) Config() *dagger.Directory {
@@ -487,6 +521,11 @@ func (p *Pipeline) asWorkflow() Workflow {
 		p.warmEngineStep(),
 		p.callDaggerStep(),
 	}
+
+	if p.ArtifactUploadStep != nil {
+		steps = append(steps, *p.ArtifactUploadStep)
+	}
+
 	if p.Settings.StopEngine {
 		steps = append(steps, p.stopEngineStep())
 	}
@@ -612,5 +651,16 @@ func (p *Pipeline) bashStep(id string, env map[string]string) JobStep {
 		Shell: "bash",
 		Run:   script,
 		Env:   env,
+	}
+}
+
+func (p *Pipeline) uploadArtifactStep(upload map[string]string) *JobStep {
+	return &JobStep{
+		Name: upload["stepName"],
+		Uses: "actions/upload-artifact@v3",
+		With: map[string]string{
+			"name": upload["artifactName"],
+			"path": upload["artifactPath"],
+		},
 	}
 }
